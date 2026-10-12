@@ -1,0 +1,33 @@
+name: Download offline libraries
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download libraries and Cairo font
+        run: |
+          mkdir -p vendor/fonts
+          curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js -o vendor/html2canvas.min.js
+          curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js -o vendor/jspdf.umd.min.js
+          curl -fsSL -A "Mozilla/5.0 (Windows NT 10.0; Win64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" "https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" -o /tmp/g.css
+          python3 - <<'PY'
+          import re,os,json
+          css=open('/tmp/g.css',encoding='utf-8').read()
+          files=['vendor/html2canvas.min.js','vendor/jspdf.umd.min.js','vendor/cairo.css']
+          for i,u in enumerate(dict.fromkeys(re.findall(r'url\((https://[^)]+)\)',css))):
+              n='fonts/cairo-%d.woff2'%i
+              os.system('curl -fsSL -o vendor/%s "%s"'%(n,u))
+              css=css.replace(u,n); files.append('vendor/'+n)
+          open('vendor/cairo.css','w',encoding='utf-8').write(css)
+          json.dump(['./'+f for f in files],open('vendor/files.json','w'))
+          PY
+      - name: Commit files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Add offline libraries and font" || echo "nothing to commit"
+          git push
